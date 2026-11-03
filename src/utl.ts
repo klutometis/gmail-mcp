@@ -31,7 +31,8 @@ export function prepareEmailArgs(validatedArgs: any): any {
             args.body || '',
             args.to || [],
             args.cc || [],
-            args.bcc || []
+            args.bcc || [],
+            args.ccMentions !== false
         );
         args.body = compiled.text;
         args.htmlBody = compiled.html;

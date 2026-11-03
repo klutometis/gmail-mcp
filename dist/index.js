@@ -137,10 +137,11 @@ async function authenticate() {
 const SendEmailSchema = z.object({
     to: z.array(z.string()).describe("List of recipient email addresses"),
     subject: z.string().describe("Email subject"),
-    body: z.string().describe("Email body in Markdown (compiled automatically to HTML + plain-text multipart/alternative unless htmlBody is provided or mimeType='text/plain'). Supports inline `code`, bold/italic, lists, links, bare go/cl/b/ shortlinks, and Gmail mention chips via `[+Full Name](email@domain)` or `+Full Name <email@domain>` (automatically added to CC)."),
+    body: z.string().describe("Email body in Markdown (compiled automatically to HTML + plain-text multipart/alternative unless htmlBody is provided or mimeType='text/plain'). Supports inline `code`, bold/italic, lists, links, bare go/cl/b/ shortlinks, and Gmail mention chips via `[+Full Name](email@domain)` or `+Full Name <email@domain>` (auto-added to CC unless `ccMentions: false` or prefixed with `!`, e.g. `[+Full Name](!email@domain)`)."),
     htmlBody: z.string().optional().describe("Optional explicit HTML body override (omit to compile `body` from Markdown automatically)"),
     mimeType: z.enum(['text/plain', 'text/html', 'multipart/alternative']).optional().describe("Email content type (defaults to 'multipart/alternative' compiled from Markdown; set 'text/plain' to disable Markdown compilation)"),
-    cc: z.array(z.string()).optional().describe("List of CC recipients (any +Name/@Name mentions in `body` are automatically merged into CC)"),
+    cc: z.array(z.string()).optional().describe("List of CC recipients (any +Name/@Name mentions in `body` are automatically merged into CC unless ccMentions=false)"),
+    ccMentions: z.boolean().optional().describe("Whether +Name/@Name mentions in `body` are automatically added to `cc` (default: true). Set to `false` to render Gmail mention chips in the body without CCing them."),
     bcc: z.array(z.string()).optional().describe("List of BCC recipients"),
     threadId: z.string().optional().describe("Thread ID to reply to"),
     inReplyTo: z.string().optional().describe("Message ID being replied to"),

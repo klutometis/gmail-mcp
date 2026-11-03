@@ -17,7 +17,7 @@ function escapeAttr(str: string): string {
 }
 
 const SHORTLINK_EXACT_RE = /^(go\/[a-zA-Z0-9._/-]+(?:#[a-zA-Z0-9._/-]+)?|(?:cl|b)\/[0-9]+)$/;
-const EMAIL_ONLY_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const EMAIL_ONLY_RE = /^!?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 function normalizeUrl(rawUrl: string): string {
     const trimmed = rawUrl.trim();
@@ -36,7 +36,8 @@ export function compileMarkdownEmail(
     markdown: string,
     existingTo: string[] = [],
     existingCc: string[] = [],
-    existingBcc: string[] = []
+    existingBcc: string[] = [],
+    ccMentions = true
 ): CompiledEmail {
     const knownRecipients = new Set<string>(
         [...existingTo, ...existingCc, ...existingBcc].map(extractEmailAddress)
@@ -44,10 +45,12 @@ export function compileMarkdownEmail(
     const mergedCc: string[] = [...existingCc];
     let chipCounter = 0;
 
-    function registerMention(displayText: string, email: string): { html: string; text: string } {
-        const cleanEmail = email.replace(/^mailto:/i, '').trim();
+    function registerMention(displayText: string, email: string, forceNoCc = false): { html: string; text: string } {
+        const rawClean = email.replace(/^mailto:/i, '').trim();
+        const noCcPrefix = rawClean.startsWith('!');
+        const cleanEmail = (noCcPrefix ? rawClean.slice(1) : rawClean).trim();
         const lower = cleanEmail.toLowerCase();
-        if (!knownRecipients.has(lower)) {
+        if (ccMentions && !forceNoCc && !noCcPrefix && !knownRecipients.has(lower)) {
             knownRecipients.add(lower);
             mergedCc.push(cleanEmail);
         }
@@ -67,7 +70,7 @@ export function compileMarkdownEmail(
             .replace(/ <- /g, ' ← ');
 
         // Match angle-bracket mentions, bare +email mentions, bare URLs, or bare shortlinks
-        const tokenRe = /(^|[\s([,;])(?:([+@][A-Za-z0-9_.\u00C0-\u024F-]+(?:\s+[A-Za-z0-9_.\u00C0-\u024F-]+){0,4})\s*<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>|([+@])([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?=$|[\s)\],.;!?])|(https?:\/\/[^\s<>[\]]+)|(go\/[a-zA-Z0-9._/-]+(?:#[a-zA-Z0-9._/-]+)?|(?:cl|b)\/[0-9]+))/g;
+        const tokenRe = /(^|[\s([,;])(?:([+@][A-Za-z0-9_.\u00C0-\u024F-]+(?:\s+[A-Za-z0-9_.\u00C0-\u024F-]+){0,4})\s*<(!?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>|([+@])(!?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?=$|[\s)\],.;!?])|(https?:\/\/[^\s<>[\]]+)|(go\/[a-zA-Z0-9._/-]+(?:#[a-zA-Z0-9._/-]+)?|(?:cl|b)\/[0-9]+))/g;
 
         let htmlOut = '';
         let textOut = '';
@@ -85,7 +88,7 @@ export function compileMarkdownEmail(
                 htmlOut += m.html;
                 textOut += m.text;
             } else if (bareSigil && bareEmail) {
-                const m = registerMention(`${bareSigil}${bareEmail}`, bareEmail);
+                const m = registerMention(`${bareSigil}${bareEmail.replace(/^!/, '')}`, bareEmail);
                 htmlOut += m.html;
                 textOut += m.text;
             } else if (rawUrl) {

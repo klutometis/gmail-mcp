@@ -24,7 +24,7 @@ export const validateEmail = (email) => {
 export function prepareEmailArgs(validatedArgs) {
     const args = { ...validatedArgs };
     if (!args.htmlBody && args.mimeType !== 'text/plain') {
-        const compiled = compileMarkdownEmail(args.body || '', args.to || [], args.cc || [], args.bcc || []);
+        const compiled = compileMarkdownEmail(args.body || '', args.to || [], args.cc || [], args.bcc || [], args.ccMentions !== false);
         args.body = compiled.text;
         args.htmlBody = compiled.html;
         args.cc = compiled.cc.length > 0 ? compiled.cc : undefined;
