@@ -1,17 +1,16 @@
 {
-  "name": "@gongrzhe/server-gmail-autoauth-mcp",
-  "version": "1.1.11",
-  "description": "Gmail MCP server with auto authentication support",
+  "name": "@klutometis/gmail-mcp",
+  "version": "1.2.0",
+  "description": "Gmail MCP server with auto authentication, Markdown-to-HTML+text compilation, shortlinks, and +mention chips",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "gmail-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "start": "node dist/index.js",
     "auth": "node dist/index.js auth",
-    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "files": [
@@ -29,16 +28,16 @@
     "claude",
     "auto-auth"
   ],
-  "author": "gongrzhe",
+  "author": "Peter Danenberg <github@pcd.la> (forked from gongrzhe)",
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gongrzhe/server-gmail-autoauth-mcp.git"
+    "url": "git+https://github.com/klutometis/gmail-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/gongrzhe/server-gmail-autoauth-mcp/issues"
+    "url": "https://github.com/klutometis/gmail-mcp/issues"
   },
-  "homepage": "https://github.com/gongrzhe/server-gmail-autoauth-mcp#readme",
+  "homepage": "https://github.com/klutometis/gmail-mcp#readme",
   "publishConfig": {
     "access": "public"
   },

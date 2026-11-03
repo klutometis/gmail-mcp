@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { lookup as mimeLookup } from 'mime-types';
 import nodemailer from 'nodemailer';
+import { compileMarkdownEmail } from './markdown.js';
 
 /**
  * Helper function to encode email headers containing non-ASCII characters
@@ -17,18 +17,38 @@ function encodeEmailHeader(text: string): string {
 }
 
 export const validateEmail = (email: string): boolean => {
+    const trimmed = email.trim();
+    const angleMatch = trimmed.match(/<([^>]+)>$/);
+    const addr = angleMatch ? angleMatch[1].trim() : trimmed;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return emailRegex.test(addr);
 };
 
+export function prepareEmailArgs(validatedArgs: any): any {
+    const args = { ...validatedArgs };
+    if (!args.htmlBody && args.mimeType !== 'text/plain') {
+        const compiled = compileMarkdownEmail(
+            args.body || '',
+            args.to || [],
+            args.cc || [],
+            args.bcc || []
+        );
+        args.body = compiled.text;
+        args.htmlBody = compiled.html;
+        args.cc = compiled.cc.length > 0 ? compiled.cc : undefined;
+        args.mimeType = 'multipart/alternative';
+    } else if (args.htmlBody && !args.mimeType) {
+        args.mimeType = 'multipart/alternative';
+    }
+    return args;
+}
+
 export function createEmailMessage(validatedArgs: any): string {
-    const encodedSubject = encodeEmailHeader(validatedArgs.subject);
-    // Determine content type based on available content and explicit mimeType
-    let mimeType = validatedArgs.mimeType || 'text/plain';
-    
-    // If htmlBody is provided and mimeType isn't explicitly set to text/plain,
-    // use multipart/alternative to include both versions
-    if (validatedArgs.htmlBody && mimeType !== 'text/plain') {
+    const args = prepareEmailArgs(validatedArgs);
+    const encodedSubject = encodeEmailHeader(args.subject);
+    let mimeType = args.mimeType || 'multipart/alternative';
+
+    if (args.htmlBody && mimeType !== 'text/plain' && mimeType !== 'text/html') {
         mimeType = 'multipart/alternative';
     }
 
@@ -36,7 +56,7 @@ export function createEmailMessage(validatedArgs: any): string {
     const boundary = `----=_NextPart_${Math.random().toString(36).substring(2)}`;
 
     // Validate email addresses
-    (validatedArgs.to as string[]).forEach(email => {
+    (args.to as string[]).forEach(email => {
         if (!validateEmail(email)) {
             throw new Error(`Recipient email address is invalid: ${email}`);
         }
@@ -45,13 +65,13 @@ export function createEmailMessage(validatedArgs: any): string {
     // Common email headers
     const emailParts = [
         'From: me',
-        `To: ${validatedArgs.to.join(', ')}`,
-        validatedArgs.cc ? `Cc: ${validatedArgs.cc.join(', ')}` : '',
-        validatedArgs.bcc ? `Bcc: ${validatedArgs.bcc.join(', ')}` : '',
+        `To: ${args.to.join(', ')}`,
+        args.cc && args.cc.length > 0 ? `Cc: ${args.cc.join(', ')}` : '',
+        args.bcc && args.bcc.length > 0 ? `Bcc: ${args.bcc.join(', ')}` : '',
         `Subject: ${encodedSubject}`,
         // Add thread-related headers if specified
-        validatedArgs.inReplyTo ? `In-Reply-To: ${validatedArgs.inReplyTo}` : '',
-        validatedArgs.inReplyTo ? `References: ${validatedArgs.inReplyTo}` : '',
+        args.inReplyTo ? `In-Reply-To: ${args.inReplyTo}` : '',
+        args.inReplyTo ? `References: ${args.inReplyTo}` : '',
         'MIME-Version: 1.0',
     ].filter(Boolean);
 
@@ -60,46 +80,47 @@ export function createEmailMessage(validatedArgs: any): string {
         // Multipart email with both plain text and HTML
         emailParts.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
         emailParts.push('');
-        
+
         // Plain text part
         emailParts.push(`--${boundary}`);
         emailParts.push('Content-Type: text/plain; charset=UTF-8');
-        emailParts.push('Content-Transfer-Encoding: 7bit');
+        emailParts.push('Content-Transfer-Encoding: 8bit');
         emailParts.push('');
-        emailParts.push(validatedArgs.body);
+        emailParts.push(args.body);
         emailParts.push('');
-        
+
         // HTML part
         emailParts.push(`--${boundary}`);
         emailParts.push('Content-Type: text/html; charset=UTF-8');
-        emailParts.push('Content-Transfer-Encoding: 7bit');
+        emailParts.push('Content-Transfer-Encoding: 8bit');
         emailParts.push('');
-        emailParts.push(validatedArgs.htmlBody || validatedArgs.body); // Use body as fallback
+        emailParts.push(args.htmlBody || args.body);
         emailParts.push('');
-        
+
         // Close the boundary
         emailParts.push(`--${boundary}--`);
     } else if (mimeType === 'text/html') {
         // HTML-only email
         emailParts.push('Content-Type: text/html; charset=UTF-8');
-        emailParts.push('Content-Transfer-Encoding: 7bit');
+        emailParts.push('Content-Transfer-Encoding: 8bit');
         emailParts.push('');
-        emailParts.push(validatedArgs.htmlBody || validatedArgs.body);
+        emailParts.push(args.htmlBody || args.body);
     } else {
-        // Plain text email (default)
+        // Plain text email
         emailParts.push('Content-Type: text/plain; charset=UTF-8');
-        emailParts.push('Content-Transfer-Encoding: 7bit');
+        emailParts.push('Content-Transfer-Encoding: 8bit');
         emailParts.push('');
-        emailParts.push(validatedArgs.body);
+        emailParts.push(args.body);
     }
 
     return emailParts.join('\r\n');
 }
 
-
 export async function createEmailWithNodemailer(validatedArgs: any): Promise<string> {
+    const args = prepareEmailArgs(validatedArgs);
+
     // Validate email addresses
-    (validatedArgs.to as string[]).forEach(email => {
+    (args.to as string[]).forEach(email => {
         if (!validateEmail(email)) {
             throw new Error(`Recipient email address is invalid: ${email}`);
         }
@@ -114,13 +135,13 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
 
     // Prepare attachments for nodemailer
     const attachments = [];
-    for (const filePath of validatedArgs.attachments) {
+    for (const filePath of args.attachments) {
         if (!fs.existsSync(filePath)) {
             throw new Error(`File does not exist: ${filePath}`);
         }
-        
+
         const fileName = path.basename(filePath);
-        
+
         attachments.push({
             filename: fileName,
             path: filePath
@@ -129,21 +150,20 @@ export async function createEmailWithNodemailer(validatedArgs: any): Promise<str
 
     const mailOptions = {
         from: 'me', // Gmail API will replace this with the authenticated user
-        to: validatedArgs.to.join(', '),
-        cc: validatedArgs.cc?.join(', '),
-        bcc: validatedArgs.bcc?.join(', '),
-        subject: validatedArgs.subject,
-        text: validatedArgs.body,
-        html: validatedArgs.htmlBody,
+        to: args.to.join(', '),
+        cc: args.cc?.join(', '),
+        bcc: args.bcc?.join(', '),
+        subject: args.subject,
+        text: args.body,
+        html: args.htmlBody,
         attachments: attachments,
-        inReplyTo: validatedArgs.inReplyTo,
-        references: validatedArgs.inReplyTo
+        inReplyTo: args.inReplyTo,
+        references: args.inReplyTo
     };
 
     // Generate the raw message
     const info = await transporter.sendMail(mailOptions);
     const rawMessage = info.message.toString();
-    
+
     return rawMessage;
 }
-
